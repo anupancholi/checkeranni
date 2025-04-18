@@ -1,21 +1,3 @@
-"""
-STORM Wiki pipeline powered by local model hosted by Ollama server and You.com or Bing search engine.
-You need to set up the following environment variables to run this script:
-    - YDC_API_KEY: You.com API key; BING_SEARCH_API_KEY: Bing Search API key, SERPER_API_KEY: Serper API key, BRAVE_API_KEY: Brave API key, or TAVILY_API_KEY: Tavily API key
-You also need to have a Ollama server running with the llama3 model or other. Specify `--url`, `--port` and `--model` accordingly.
-
-Output will be structured as below
-args.output_dir/
-    topic_name/  # topic_name will follow convention of underscore-connected topic name w/o space and slash
-        conversation_log.json           # Log of information-seeking conversation
-        raw_search_results.json         # Raw search results from search engine
-        direct_gen_outline.txt          # Outline directly generated with LLM's parametric knowledge
-        storm_gen_outline.txt           # Outline refined with collected information
-        url_to_info.json                # Sources that are used in the final article
-        storm_gen_article.txt           # Final article generated
-        storm_gen_article_polished.txt  # Polished final article (if args.do_polish_article is True)
-"""
-
 import os
 import sys
 from argparse import ArgumentParser

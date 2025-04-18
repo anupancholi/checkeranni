@@ -1,6 +1,6 @@
 import os
 import time
-
+import requests
 import demo_util
 import streamlit as st
 from demo_util import (
@@ -9,7 +9,18 @@ from demo_util import (
     DemoUIHelper,
     truncate_filename,
 )
-
+def query_llama(prompt):
+    try:
+        response = requests.post(
+            "http://localhost:11434/api/generate",  # Update with correct API endpoint
+            json={"model": "llama3.2:latest", "prompt": prompt}
+        )
+        if response.status_code == 200:
+            return response.json().get("response", "No response from LLaMA")
+        else:
+            return f"Error: {response.status_code} - {response.text}"
+    except Exception as e:
+        return f"Error connecting to LLaMA: {e}"
 
 def handle_not_started():
     if st.session_state["page3_write_article_state"] == "not started":
@@ -74,52 +85,48 @@ def handle_pre_writing():
         status = st.status(
             "I am brain**STORM**ing now to research the topic. (This may take 2-3 minutes.)"
         )
-        st_callback_handler = demo_util.StreamlitCallbackHandler(status)
         with status:
-            # STORM main gen outline
-            st.session_state["runner"].run(
-                topic=st.session_state["page3_topic"],
-                do_research=True,
-                do_generate_outline=True,
-                do_generate_article=False,
-                do_polish_article=False,
-                callback_handler=st_callback_handler,
-            )
-            conversation_log_path = os.path.join(
-                st.session_state["page3_current_working_dir"],
-                st.session_state["page3_topic_name_truncated"],
-                "conversation_log.json",
-            )
-            demo_util._display_persona_conversations(
-                DemoFileIOHelper.read_json_file(conversation_log_path)
-            )
+            topic = st.session_state["page3_topic"]
+            research_prompt = f"Research and generate an outline for the topic: {topic}"
+            
+            # Call LLaMA instead of OpenAI
+            response = query_llama(research_prompt)
+
+            if "Error" in response:
+                st.error(response)
+            else:
+                st.session_state["page3_outline"] = response  # Store LLaMA output
+                st.write("### Generated Outline:")
+                st.write(response)  # Show output
+
             st.session_state["page3_write_article_state"] = "final_writing"
             status.update(label="brain**STORM**ing complete!", state="complete")
 
 
+
 def handle_final_writing():
     if st.session_state["page3_write_article_state"] == "final_writing":
-        # polish final article
         with st.status(
             "Now I will connect the information I found for your reference. (This may take 4-5 minutes.)"
         ) as status:
             st.info(
                 "Now I will connect the information I found for your reference. (This may take 4-5 minutes.)"
             )
-            st.session_state["runner"].run(
-                topic=st.session_state["page3_topic"],
-                do_research=False,
-                do_generate_outline=False,
-                do_generate_article=True,
-                do_polish_article=True,
-                remove_duplicate=False,
-            )
-            # finish the session
-            st.session_state["runner"].post_run()
 
-            # update status bar
+            # Use LLaMA to generate the full article
+            article_prompt = f"Write a detailed article based on the following outline:\n\n{st.session_state['page3_outline']}"
+            response = query_llama(article_prompt)
+
+            if "Error" in response:
+                st.error(response)
+            else:
+                st.session_state["page3_article"] = response  # Store LLaMA article
+                st.write("### Generated Article:")
+                st.write(response)  # Display article
+
             st.session_state["page3_write_article_state"] = "prepare_to_show_result"
-            status.update(label="information snythesis complete!", state="complete")
+            status.update(label="Information synthesis complete!", state="complete")
+
 
 
 def handle_prepare_to_show_result():
@@ -133,22 +140,16 @@ def handle_prepare_to_show_result():
 
 def handle_completed():
     if st.session_state["page3_write_article_state"] == "completed":
-        # display polished article
-        current_working_dir_paths = DemoFileIOHelper.read_structure_to_dict(
-            st.session_state["page3_current_working_dir"]
-        )
-        current_article_file_path_dict = current_working_dir_paths[
-            st.session_state["page3_topic_name_truncated"]
-        ]
-        demo_util.display_article_page(
-            selected_article_name=st.session_state["page3_topic_name_cleaned"],
-            selected_article_file_path_dict=current_article_file_path_dict,
-            show_title=True,
-            show_main_article=True,
-        )
+        st.title(f"Generated Article: {st.session_state['page3_topic']}")
+
+        # Display the generated article from LLaMA
+        if "page3_article" in st.session_state:
+            st.write(st.session_state["page3_article"])
+        else:
+            st.warning("No article generated yet.")
 
 
-def create_new_article_page():
+def create_new_article_page(query_llama):
     demo_util.clear_other_page_session_state(page_index=3)
 
     if "page3_write_article_state" not in st.session_state:
